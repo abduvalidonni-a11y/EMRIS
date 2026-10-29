@@ -59,20 +59,16 @@ class MainActivity : Activity() {
 
         // 2) Sozlamalar
         col.addView(label("Sozlamalar", 18f))
-        col.addView(label("Picovoice AccessKey (console.picovoice.ai)"))
-        val pv = field("AccessKey", sp.getString("picovoice", "").orEmpty()); col.addView(pv)
         col.addView(label("Gemini API kaliti (aistudio.google.com)"))
         val gm = field("API key", sp.getString("gemini", "").orEmpty()); col.addView(gm)
-        col.addView(label("\"JARVIS\" sezgirligi"))
-        val sens = SeekBar(this).apply { max = 100; progress = sp.getInt("sens", 50) }; col.addView(sens)
         val auto = CheckBox(this).apply {
             text = "Telefon yoqilganda avtomatik ishga tushsin"; setTextColor(Color.WHITE)
             isChecked = sp.getBoolean("autostart", true)
         }
         col.addView(auto)
         col.addView(button("Saqlash va ishga tushirish") {
-            sp.edit().putString("picovoice", pv.text.toString().trim()).putString("gemini", gm.text.toString().trim())
-                .putInt("sens", sens.progress).putBoolean("autostart", auto.isChecked).apply()
+            sp.edit().putString("gemini", gm.text.toString().trim())
+                .putBoolean("autostart", auto.isChecked).apply()
             stopService(Intent(this, JarvisService::class.java))
             ContextCompat.startForegroundService(this, Intent(this, JarvisService::class.java))
             Toast.makeText(this, "JARVIS ishga tushdi", Toast.LENGTH_SHORT).show()

@@ -1,8 +1,7 @@
 # JARVIS - Android ovozli yordamchi
 
 ## 1. Kerakli kalitlar (bepul)
-1. **Picovoice AccessKey** - https://console.picovoice.ai ro'yxatdan o'ting, AccessKey ni nusxalang.
-   ("Jarvis" - Porcupine'ning tayyor so'zi, alohida model kerak emas.)
+1. Uyg'otish so'zi uchun Vosk ishlatiladi (kalit kerak emas; birinchi ishga tushishda ~40 MB model internetdan yuklanadi).
 2. **Gemini API kaliti** - https://aistudio.google.com/apikey
 
 ## 2. APK yig'ish (ikki yo'l)

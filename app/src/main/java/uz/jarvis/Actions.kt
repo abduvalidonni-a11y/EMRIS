@@ -120,7 +120,7 @@ object Actions {
         }
     }
 
-       private fun number(ctx: Context, name: String): String? {
+    private fun number(ctx: Context, name: String): String? {
         if (name.filter { it.isDigit() }.length >= 7) return name
         val uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
         val numCol = ContactsContract.CommonDataKinds.Phone.NUMBER

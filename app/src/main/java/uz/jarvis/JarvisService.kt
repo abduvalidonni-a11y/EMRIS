@@ -1,8 +1,5 @@
 package uz.jarvis
 
-import ai.picovoice.porcupine.Porcupine
-import ai.picovoice.porcupine.PorcupineManager
-import ai.picovoice.porcupine.PorcupineManagerCallback
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -20,13 +17,23 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.os.Bundle
 import androidx.core.app.ServiceCompat
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.Locale
+import java.util.zip.ZipInputStream
+import org.vosk.Model
+import org.vosk.Recognizer
+import org.vosk.android.RecognitionListener as VoskListener
+import org.vosk.android.SpeechService
 
 class JarvisService : Service() {
 
     companion object { const val ACTION_LISTEN = "uz.jarvis.LISTEN" }
 
-    private var porcupine: PorcupineManager? = null
+    private var speech: SpeechService? = null
+    private var model: Model? = null
+    @Volatile private var loading = false
     private val main = Handler(Looper.getMainLooper())
     private var tts: TextToSpeech? = null
     private var ttsReady = false
@@ -68,19 +75,65 @@ class JarvisService : Service() {
         return START_STICKY
     }
 
+    private val modelName = "vosk-model-small-en-us-0.15"
+
     private fun startWake() {
-        try {
-            if (porcupine == null) {
-                val sp = Prefs.sp(this)
-                val key = sp.getString("picovoice", "").orEmpty()
-                if (key.isBlank()) { History.add("! Picovoice AccessKey kiritilmagan (Sozlamalar)."); return }
-                porcupine = PorcupineManager.Builder()
-                    .setAccessKey(key)
-                    .setKeyword(Porcupine.BuiltInKeyword.JARVIS)
-                    .setSensitivity(sp.getInt("sens", 50) / 100f)
-                    .build(this, PorcupineManagerCallback { onWake() })
+        if (loading) return
+        loading = true
+        Thread {
+            try {
+                if (model == null) {
+                    val root = filesDir
+                    val dir = File(root, modelName)
+                    val done = File(root, "$modelName.done")
+                    if (!done.exists()) {
+                        History.add("Uyg'otish modeli yuklanmoqda (~40 MB), kuting...")
+                        dir.deleteRecursively()
+                        download(root)
+                        done.createNewFile()
+                    }
+                    model = Model(dir.absolutePath)
+                }
+                main.post { beginWake() }
+            } catch (e: Exception) {
+                History.add("! Uyg'otish so'zi xatosi: ${e.message}")
+            } finally {
+                loading = false
             }
-            porcupine?.start()
+        }.start()
+    }
+
+    private fun download(target: File) {
+        val con = URL("https://alphacephei.com/vosk/models/$modelName.zip").openConnection() as HttpURLConnection
+        con.connectTimeout = 20000
+        con.readTimeout = 60000
+        ZipInputStream(con.inputStream.buffered()).use { z ->
+            var e = z.nextEntry
+            while (e != null) {
+                val f = File(target, e.name)
+                if (!f.canonicalPath.startsWith(target.canonicalPath)) throw SecurityException("zip")
+                if (e.isDirectory) f.mkdirs() else {
+                    f.parentFile?.mkdirs()
+                    f.outputStream().use { z.copyTo(it) }
+                }
+                e = z.nextEntry
+            }
+        }
+    }
+
+    private fun beginWake() {
+        try {
+            speech?.shutdown()
+            val rec = Recognizer(model, 16000f, "[\"jarvis\", \"[unk]\"]")
+            val sp = SpeechService(rec, 16000f)
+            speech = sp
+            sp.startListening(object : VoskListener {
+                override fun onPartialResult(h: String?) { if (h?.contains("jarvis") == true) onWake() }
+                override fun onResult(h: String?) { if (h?.contains("jarvis") == true) onWake() }
+                override fun onFinalResult(h: String?) {}
+                override fun onError(e: Exception?) { History.add("! Mikrofon xatosi: ${e?.message}") }
+                override fun onTimeout() {}
+            })
         } catch (e: Exception) {
             History.add("! Uyg'otish so'zi xatosi: ${e.message}")
         }
@@ -89,7 +142,8 @@ class JarvisService : Service() {
     private fun onWake() {
         if (busy) return
         busy = true
-        try { porcupine?.stop() } catch (_: Exception) {}
+        try { speech?.shutdown() } catch (_: Exception) {}
+        speech = null
         main.post { speak("Labbay, janob.") { listen() } }
     }
 
@@ -150,7 +204,7 @@ class JarvisService : Service() {
     }
 
     override fun onDestroy() {
-        try { porcupine?.stop(); porcupine?.delete() } catch (_: Exception) {}
+        try { speech?.shutdown(); model?.close() } catch (_: Exception) {}
         recognizer?.destroy()
         tts?.shutdown()
         super.onDestroy()
