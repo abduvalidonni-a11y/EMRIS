@@ -120,11 +120,14 @@ object Actions {
         }
     }
 
-    private fun number(ctx: Context, name: String): String? {
+       private fun number(ctx: Context, name: String): String? {
         if (name.filter { it.isDigit() }.length >= 7) return name
-        val P = ContactsContract.CommonDataKinds.Phone
-        ctx.contentResolver.query(P.CONTENT_URI, arrayOf(P.NUMBER), "${P.DISPLAY_NAME} LIKE ?",
-            arrayOf("%$name%"), null)?.use { if (it.moveToFirst()) return it.getString(0) }
+        val uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+        val numCol = ContactsContract.CommonDataKinds.Phone.NUMBER
+        val nameCol = ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
+        ctx.contentResolver.query(uri, arrayOf(numCol), "$nameCol LIKE ?", arrayOf("%$name%"), null)?.use {
+            if (it.moveToFirst()) return it.getString(0)
+        }
         return null
     }
 
